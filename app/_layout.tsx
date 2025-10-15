@@ -6,7 +6,7 @@ import 'react-native-reanimated';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export const unstable_settings = {
-  anchor: '(tabs)',
+  anchor: 'welcome',
 };
 
 export default function RootLayout() {
@@ -15,10 +15,12 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
+        <Stack.Screen name="welcome" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="task/[id]" options={{ title: 'Task Detail' }} />
         <Stack.Screen name="pomodoro/session" options={{ title: 'Focus Session', presentation: 'modal' }} />
         <Stack.Screen name="journal/index" options={{ title: 'Journal', presentation: 'modal' }} />
+        <Stack.Screen name="breath" options={{ title: 'Breathing Exercises', presentation: 'modal' }} />
         <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       </Stack>
       <StatusBar style="auto" />

@@ -18,6 +18,8 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { getMistralClient, initializeMistral, type QuestionGenerationRequest, type GeneratedQuestion } from '@/lib/mistral-api';
+import { configManager } from '@/lib/config';
 
 // Add keyboard event listener interface
 declare global {
@@ -47,6 +49,11 @@ interface PopupQuestion {
   options: string[];
   correctAnswer?: number;
   explanation?: string;
+}
+
+// Enhanced to support AI-generated questions
+interface EnhancedPopupQuestion extends GeneratedQuestion {
+  // Additional UI-specific properties can be added here
 }
 
 interface ZoneAction {
@@ -236,6 +243,8 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
   const [currentQuestion, setCurrentQuestion] = useState<PopupQuestion | null>(null);
   const [isMuted, setIsMuted] = useState(true); // Start muted
   const [showZoneActions, setShowZoneActions] = useState(false);
+  const [aiQuestionCache, setAiQuestionCache] = useState<Map<string, GeneratedQuestion[]>>(new Map());
+  const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
   
   // Animations
   const translateY = useRef(new Animated.Value(0)).current;
@@ -309,16 +318,9 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
     }, delay);
   };
 
-  const showRandomQuestion = () => {
+  const showRandomQuestion = async () => {
     const currentVideo = videos[currentIndex];
-    const randomQuestion = currentVideo.questions[
-      Math.floor(Math.random() * currentVideo.questions.length)
-    ];
-    
-    const popup: PopupQuestion = {
-      question: randomQuestion,
-      options: generateQuestionOptions(randomQuestion, currentVideo),
-    };
+    setIsLoadingQuestion(true);
     
     // First show red lock screen
     setShowRedLock(true);
@@ -326,12 +328,19 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
       toValue: 1,
       duration: 500,
       useNativeDriver: true,
-    }).start(() => {
+    }).start();
+    
+    try {
+      // Try to get AI-generated questions
+      const questions = await getQuestionsForVideo(currentVideo);
+      const randomQuestion = questions[Math.floor(Math.random() * questions.length)];
+      
       // After 1.5 seconds, show the question
       setTimeout(() => {
-        setCurrentQuestion(popup);
+        setCurrentQuestion(randomQuestion);
         setShowPopup(true);
         setShowRedLock(false);
+        setIsLoadingQuestion(false);
         redLockAnim.setValue(0);
         
         Animated.spring(popupScale, {
@@ -339,31 +348,160 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
           useNativeDriver: true,
         }).start();
       }, 1500);
-    });
+    } catch (error) {
+      console.error('Error generating question:', error);
+      // Fallback to original method
+      const randomQuestionText = currentVideo.questions[
+        Math.floor(Math.random() * currentVideo.questions.length)
+      ];
+      
+      const popup: PopupQuestion = {
+        question: randomQuestionText,
+        options: generateQuestionOptions(randomQuestionText, currentVideo),
+      };
+      
+      setTimeout(() => {
+        setCurrentQuestion(popup);
+        setShowPopup(true);
+        setShowRedLock(false);
+        setIsLoadingQuestion(false);
+        redLockAnim.setValue(0);
+        
+        Animated.spring(popupScale, {
+          toValue: 1,
+          useNativeDriver: true,
+        }).start();
+      }, 1500);
+    }
     
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   };
 
+  // Helper function to get questions for a video (AI or fallback)
+  const getQuestionsForVideo = async (video: TechVideo): Promise<GeneratedQuestion[]> => {
+    // Check cache first
+    if (aiQuestionCache.has(video.id)) {
+      return aiQuestionCache.get(video.id)!;
+    }
+    
+    // Try AI generation if available
+    const mistralClient = getMistralClient();
+    if (mistralClient && configManager.isMistralEnabled()) {
+      try {
+        const request: QuestionGenerationRequest = {
+          videoTitle: video.title,
+          videoDescription: video.description,
+          techStack: video.techStack,
+          difficulty: video.difficulty,
+          category: video.category
+        };
+        
+        const questions = await mistralClient.generateQuestions(request);
+        
+        // Cache the results
+        setAiQuestionCache(prev => new Map(prev.set(video.id, questions)));
+        return questions;
+      } catch (error) {
+        console.warn('AI question generation failed, using fallback:', error);
+      }
+    }
+    
+    // Fallback to enhanced mock questions
+    const fallbackQuestions = generateFallbackQuestions(video);
+    setAiQuestionCache(prev => new Map(prev.set(video.id, fallbackQuestions)));
+    return fallbackQuestions;
+  };
+  
+  const generateFallbackQuestions = (video: TechVideo): GeneratedQuestion[] => {
+    // Create contextual questions based on video content
+    const questions: GeneratedQuestion[] = [];
+    
+    if (video.category === 'coding') {
+      questions.push({
+        question: `What is a key advantage of ${video.techStack[0]} mentioned in this video?`,
+        options: [
+          'Faster development cycles',
+          'Better code maintainability', 
+          'Enhanced performance',
+          'All of the above'
+        ],
+        correctAnswer: 3,
+        explanation: `${video.techStack[0]} typically provides multiple development benefits as discussed in the video.`
+      });
+    } else if (video.category === 'career') {
+      questions.push({
+        question: 'According to the video, what is most crucial for career advancement?',
+        options: [
+          'Technical skills only',
+          'Networking and relationships',
+          'Continuous learning and adaptation',
+          'Years of experience'
+        ],
+        correctAnswer: 2,
+        explanation: 'The tech industry values continuous learning and adaptability above static experience.'
+      });
+    } else if (video.category === 'startup') {
+      questions.push({
+        question: 'What startup principle was emphasized in this video?',
+        options: [
+          'Move fast and break things',
+          'Validate before building',
+          'Raise funding first',
+          'Hire the best talent'
+        ],
+        correctAnswer: 1,
+        explanation: 'Successful startups validate their ideas with customers before investing heavily in development.'
+      });
+    }
+    
+    // Add skip option to all questions
+    questions.forEach(q => {
+      q.options.push('Skip Question');
+    });
+    
+    return questions.length > 0 ? questions : [{
+      question: `What was the main takeaway from "${video.title}"?`,
+      options: [
+        'Understanding core concepts',
+        'Learning practical applications',
+        'Avoiding common pitfalls',
+        'All of the above',
+        'Skip Question'
+      ],
+      correctAnswer: 3,
+      explanation: 'Educational content typically covers theory, practice, and common mistakes to avoid.'
+    }];
+  };
+
   const generateQuestionOptions = (question: string, video: TechVideo): string[] => {
-    // Mock options - in real app, AI would generate these
-    const genericOptions = [
+    // Legacy function - now mainly used for fallback
+    return [
       'Option A - This could be right',
       'Option B - Maybe this one',
       'Option C - Or perhaps this',
       'Skip Question',
     ];
-    return genericOptions;
   };
 
   const handleQuestionAnswer = (optionIndex: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
-    if (optionIndex === 3) { // Skip option
+    // Check if it's skip option (last option)
+    if (currentQuestion && optionIndex === currentQuestion.options.length - 1) {
       closePopup();
       return;
     }
     
-    // Show zone actions after answering
+    // Show feedback for correct/incorrect answer
+    const isCorrect = currentQuestion?.correctAnswer === optionIndex;
+    if (isCorrect) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
+    
+    // TODO: Show explanation briefly before zone actions
+    // For now, go directly to zone actions
     closePopup();
     setTimeout(() => {
       showZoneActionsPopup();
