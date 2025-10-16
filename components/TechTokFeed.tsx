@@ -85,8 +85,8 @@ const MOCK_TECH_VIDEOS: TechVideo[] = [
   },
   {
     id: '2',
-    title: 'Startup Pitch Deck Breakdown',
-    uri: require('../assets/videos/video1.mp4'),
+    title: 'Apple's New AR Glasses Are Almost Here',
+    uri: require('../assets/videos/apple-glasses.mp4'),
     description: 'Analyzing successful startup pitch decks',
     techStack: ['Business', 'Fundraising', 'Strategy'],
     difficulty: 'intermediate',
@@ -101,8 +101,8 @@ const MOCK_TECH_VIDEOS: TechVideo[] = [
   },
   {
     id: '3',
-    title: 'System Design Interview - Scaling to 1M Users',
-    uri: require('../assets/videos/video1.mp4'),
+    title: 'Latest Chinese Carseat Technology',
+    uri: require('../assets/videos/carseat-technology.mp4'),
     description: 'System design interview preparation',
     techStack: ['System Design', 'Architecture', 'Scalability'],
     difficulty: 'advanced',
