@@ -12,32 +12,54 @@ import {
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Colors, Animations, Spacing, BorderRadius } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 export default function WelcomeScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(50)).current;
   const logoScale = useRef(new Animated.Value(0.8)).current;
+  const featuresAnim = useRef(new Animated.Value(0)).current;
+  const buttonAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Animated entrance
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 800,
-        useNativeDriver: true,
-      }),
+    // Staggered entrance animations
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: Animations.slow.duration,
+          useNativeDriver: true,
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: Animations.slow.duration,
+          useNativeDriver: true,
+        }),
+      ]),
       Animated.spring(logoScale, {
         toValue: 1,
+        tension: Animations.spring.tension,
+        friction: Animations.spring.friction,
         useNativeDriver: true,
-        tension: 100,
-        friction: 8,
+      }),
+      Animated.delay(200),
+      Animated.timing(featuresAnim, {
+        toValue: 1,
+        duration: Animations.timing.duration,
+        useNativeDriver: true,
+      }),
+      Animated.delay(100),
+      Animated.spring(buttonAnim, {
+        toValue: 1,
+        tension: Animations.spring.tension * 1.2,
+        friction: Animations.spring.friction,
+        useNativeDriver: true,
       }),
     ]).start();
   }, []);
@@ -84,7 +106,20 @@ export default function WelcomeScreen() {
             </Text>
 
             {/* Features */}
-            <View style={styles.featuresContainer}>
+            <Animated.View 
+              style={[
+                styles.featuresContainer,
+                {
+                  opacity: featuresAnim,
+                  transform: [{
+                    translateY: featuresAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [30, 0],
+                    })
+                  }]
+                }
+              ]}
+            >
               <FeatureItem 
                 icon="play.rectangle.fill"
                 title="TechTok Feed"
@@ -100,7 +135,7 @@ export default function WelcomeScreen() {
                 title="Growth Zones"
                 description="Focus, chill, and reflect zones"
               />
-            </View>
+            </Animated.View>
           </Animated.View>
 
           {/* Get Started Button */}
@@ -108,8 +143,17 @@ export default function WelcomeScreen() {
             style={[
               styles.buttonContainer,
               {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }]
+                opacity: buttonAnim,
+                transform: [{ 
+                  translateY: buttonAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [50, 0],
+                  }),
+                  scale: buttonAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0.8, 1],
+                  })
+                }]
               }
             ]}
           >

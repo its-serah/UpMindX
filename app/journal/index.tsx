@@ -208,7 +208,7 @@ export default function JournalScreen() {
         {/* Writing Area */}
         <View style={styles.writingSection}>
           <View style={styles.writingHeader}>
-            <Text style={styles.sectionTitle}>What's on your mind?</Text>
+            <Text style={styles.sectionTitle}>What&apos;s on your mind?</Text>
             <Text style={styles.wordCount}>{wordCount} words</Text>
           </View>
           

@@ -5,15 +5,40 @@ import * as Haptics from 'expo-haptics';
 import { configManager, setupMistralApiKey } from '@/lib/config';
 import { initializeMistral } from '@/lib/mistral-api';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { LoadingSpinner } from '@/components/ui/loading-states';
+import { Colors, Spacing, BorderRadius } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function SettingsScreen() {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  
   const [apiKey, setApiKey] = useState('');
   const [isConfigured, setIsConfigured] = useState(configManager.isMistralEnabled());
   const [isTesting, setIsTesting] = useState(false);
+  const [validationError, setValidationError] = useState('');
+
+  const validateApiKey = (key: string): boolean => {
+    // Basic validation for Mistral API key format
+    const trimmedKey = key.trim();
+    if (!trimmedKey) {
+      setValidationError('API key is required');
+      return false;
+    }
+    if (trimmedKey.length < 10) {
+      setValidationError('API key appears to be too short');
+      return false;
+    }
+    if (!trimmedKey.startsWith('sk-') && !trimmedKey.includes('mistral')) {
+      setValidationError('Please check your API key format');
+      return false;
+    }
+    setValidationError('');
+    return true;
+  };
 
   const handleSaveApiKey = async () => {
-    if (!apiKey.trim()) {
-      Alert.alert('Error', 'Please enter your Mistral API key');
+    if (!validateApiKey(apiKey)) {
       return;
     }
 
@@ -27,6 +52,7 @@ export default function SettingsScreen() {
         initializeMistral(apiKey.trim());
         setIsConfigured(true);
         setApiKey(''); // Clear input for security
+        setValidationError('');
         
         Alert.alert(
           'Success! 🎉',
@@ -34,16 +60,10 @@ export default function SettingsScreen() {
           [{ text: 'Great!', style: 'default' }]
         );
       } else {
-        Alert.alert(
-          'Invalid API Key',
-          'Please check your API key format and try again.'
-        );
+        setValidationError('Invalid API key format. Please check and try again.');
       }
     } catch (error) {
-      Alert.alert(
-        'Configuration Error',
-        'Failed to configure Mistral AI. Please try again.'
-      );
+      setValidationError('Failed to configure Mistral AI. Please try again.');
     } finally {
       setIsTesting(false);
     }
@@ -93,7 +113,7 @@ export default function SettingsScreen() {
                 </View>
                 
                 <Text style={styles.configuredDescription}>
-                  You're getting smart, contextual questions powered by AI!
+                  You&apos;re getting smart, contextual questions powered by AI!
                 </Text>
                 
                 <Pressable 
@@ -107,23 +127,48 @@ export default function SettingsScreen() {
               <View style={styles.configurationContainer}>
                 <Text style={styles.inputLabel}>Mistral API Key</Text>
                 <TextInput
-                  style={styles.apiKeyInput}
+                  style={[
+                    styles.apiKeyInput,
+                    validationError && styles.apiKeyInputError,
+                    { borderColor: validationError ? colors.error : colors.border }
+                  ]}
                   placeholder="Enter your Mistral API key..."
                   value={apiKey}
-                  onChangeText={setApiKey}
+                  onChangeText={(text) => {
+                    setApiKey(text);
+                    if (validationError) {
+                      setValidationError('');
+                    }
+                  }}
                   secureTextEntry
                   autoCapitalize="none"
                   autoCorrect={false}
+                  editable={!isTesting}
                 />
                 
-                <Pressable
-                  style={[styles.saveButton, (!apiKey.trim() || isTesting) && styles.saveButtonDisabled]}
-                  onPress={handleSaveApiKey}
-                  disabled={!apiKey.trim() || isTesting}
-                >
-                  <Text style={styles.saveButtonText}>
-                    {isTesting ? 'Configuring...' : 'Save API Key'}
+                {validationError ? (
+                  <Text style={[styles.errorText, { color: colors.error }]}>
+                    {validationError}
                   </Text>
+                ) : null}
+                
+                <Pressable
+                  style={[
+                    styles.saveButton, 
+                    { backgroundColor: colors.primary },
+                    (!apiKey.trim() || isTesting || validationError) && [styles.saveButtonDisabled, { backgroundColor: colors.textTertiary }]
+                  ]}
+                  onPress={handleSaveApiKey}
+                  disabled={!apiKey.trim() || isTesting || !!validationError}
+                >
+                  {isTesting ? (
+                    <View style={styles.saveButtonContent}>
+                      <LoadingSpinner size="small" color="white" />
+                      <Text style={styles.saveButtonText}>Configuring...</Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save API Key</Text>
+                  )}
                 </Pressable>
                 
                 <Text style={styles.helpText}>
@@ -177,9 +222,9 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.lg,
+    marginBottom: Spacing.lg,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -232,21 +277,33 @@ const styles = StyleSheet.create({
   },
   apiKeyInput: {
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    borderColor: Colors.light.border,
+    borderRadius: BorderRadius.md,
+    paddingHorizontal: Spacing.md,
     paddingVertical: 14,
     fontSize: 16,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: Colors.light.surface,
+  },
+  apiKeyInputError: {
+    borderWidth: 2,
+  },
+  errorText: {
+    fontSize: 14,
+    marginTop: Spacing.sm,
+    fontWeight: '500',
   },
   saveButton: {
-    backgroundColor: '#6366F1',
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
     alignItems: 'center',
   },
+  saveButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+  },
   saveButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    // Color handled dynamically
   },
   saveButtonText: {
     color: 'white',

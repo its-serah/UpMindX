@@ -20,6 +20,9 @@ import { router } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getMistralClient, initializeMistral, type QuestionGenerationRequest, type GeneratedQuestion } from '@/lib/mistral-api';
 import { configManager } from '@/lib/config';
+import { VideoLoading, PulseLoader } from '@/components/ui/loading-states';
+import { Colors, Animations, Spacing, BorderRadius } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 // Add keyboard event listener interface
 declare global {
@@ -85,7 +88,7 @@ const MOCK_TECH_VIDEOS: TechVideo[] = [
   },
   {
     id: '2',
-    title: 'Apple's New AR Glasses Are Almost Here',
+    title: "Apple's New AR Glasses Are Almost Here",
     uri: require('../assets/videos/apple-glasses.mp4'),
     description: 'Analyzing successful startup pitch decks',
     techStack: ['Business', 'Fundraising', 'Strategy'],
@@ -237,6 +240,9 @@ interface TechTokFeedProps {
 }
 
 export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedProps) {
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+  
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showPopup, setShowPopup] = useState(false);
   const [showRedLock, setShowRedLock] = useState(false);
@@ -245,6 +251,7 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
   const [showZoneActions, setShowZoneActions] = useState(false);
   const [aiQuestionCache, setAiQuestionCache] = useState<Map<string, GeneratedQuestion[]>>(new Map());
   const [isLoadingQuestion, setIsLoadingQuestion] = useState(false);
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
   
   // Animations
   const translateY = useRef(new Animated.Value(0)).current;
@@ -263,9 +270,17 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
   // Update player when video changes
   useEffect(() => {
     if (player && videos[currentIndex]) {
+      setIsVideoLoading(true);
       player.replace(videos[currentIndex].uri);
       player.muted = isMuted;
-      player.play();
+      
+      // Add loading delay to simulate realistic loading
+      const loadingTimer = setTimeout(() => {
+        setIsVideoLoading(false);
+        player.play();
+      }, 800);
+      
+      return () => clearTimeout(loadingTimer);
     }
   }, [currentIndex, isMuted, player, videos]);
   
@@ -556,12 +571,12 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: -screenHeight,
-          duration: 300,
+          duration: Animations.timing.duration,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
-          toValue: 0.9,
-          duration: 150,
+          toValue: 0.85,
+          duration: Animations.fast.duration,
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -569,14 +584,16 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
         translateY.setValue(screenHeight);
         
         Animated.parallel([
-          Animated.timing(translateY, {
+          Animated.spring(translateY, {
             toValue: 0,
-            duration: 300,
+            tension: Animations.spring.tension,
+            friction: Animations.spring.friction,
             useNativeDriver: true,
           }),
-          Animated.timing(scaleAnim, {
+          Animated.spring(scaleAnim, {
             toValue: 1,
-            duration: 300,
+            tension: Animations.spring.tension,
+            friction: Animations.spring.friction,
             useNativeDriver: true,
           }),
         ]).start();
@@ -591,12 +608,12 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
       Animated.parallel([
         Animated.timing(translateY, {
           toValue: screenHeight,
-          duration: 300,
+          duration: Animations.timing.duration,
           useNativeDriver: true,
         }),
         Animated.timing(scaleAnim, {
-          toValue: 0.9,
-          duration: 150,
+          toValue: 0.85,
+          duration: Animations.fast.duration,
           useNativeDriver: true,
         }),
       ]).start(() => {
@@ -604,14 +621,16 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
         translateY.setValue(-screenHeight);
         
         Animated.parallel([
-          Animated.timing(translateY, {
+          Animated.spring(translateY, {
             toValue: 0,
-            duration: 300,
+            tension: Animations.spring.tension,
+            friction: Animations.spring.friction,
             useNativeDriver: true,
           }),
-          Animated.timing(scaleAnim, {
+          Animated.spring(scaleAnim, {
             toValue: 1,
-            duration: 300,
+            tension: Animations.spring.tension,
+            friction: Animations.spring.friction,
             useNativeDriver: true,
           }),
         ]).start();
@@ -677,6 +696,11 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
             allowsPictureInPicture={false}
           />
           
+          {/* Video Loading State */}
+          {isVideoLoading && (
+            <VideoLoading message="Loading next video..." />
+          )}
+          
           {/* Clean Video Overlay */}
           <View style={styles.overlay}>
             {/* Just a mute button in corner */}
@@ -715,6 +739,9 @@ export default function TechTokFeed({ videos = MOCK_TECH_VIDEOS }: TechTokFeedPr
           <View style={styles.lockContainer}>
             <IconSymbol name="lock.fill" size={80} color="white" />
             <Text style={styles.lockText}>Question Coming Up...</Text>
+            <View style={styles.lockLoader}>
+              <PulseLoader color="white" size={12} count={3} />
+            </View>
           </View>
         </Animated.View>
       </Modal>
@@ -841,19 +868,27 @@ const styles = StyleSheet.create({
   },
   lockContainer: {
     alignItems: 'center',
+    gap: Spacing.lg,
   },
   lockText: {
     fontSize: 24,
     fontWeight: 'bold',
     color: 'white',
-    marginTop: 20,
+  },
+  lockLoader: {
+    marginTop: Spacing.md,
   },
   questionPopup: {
     backgroundColor: 'white',
-    borderRadius: 20,
-    padding: 24,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
     width: '100%',
     maxWidth: 350,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 12,
   },
   questionTitle: {
     fontSize: 20,
@@ -870,15 +905,21 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   optionsContainer: {
-    gap: 12,
+    gap: Spacing.md,
   },
   optionButton: {
-    backgroundColor: '#2196F3',
-    padding: 16,
-    borderRadius: 12,
+    backgroundColor: Colors.light.primary,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    shadowColor: Colors.light.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   skipButton: {
-    backgroundColor: '#E0E0E0',
+    backgroundColor: Colors.light.surface,
+    shadowColor: '#000',
   },
   optionText: {
     fontSize: 14,

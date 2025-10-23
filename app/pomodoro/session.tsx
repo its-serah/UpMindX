@@ -266,7 +266,7 @@ export default function PomodoroSessionScreen() {
         </View>
 
         <View style={styles.motivationContainer}>
-          <Text style={styles.motivationText}>"Focus is your superpower."</Text>
+          <Text style={styles.motivationText}>&quot;Focus is your superpower.&quot;</Text>
           <Text style={styles.motivationSubtext}>Every minute of focus builds your mental strength</Text>
         </View>
       </SafeAreaView>

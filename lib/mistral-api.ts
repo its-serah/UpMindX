@@ -15,6 +15,48 @@ interface QuestionGenerationRequest {
   techStack: string[];
   difficulty: 'beginner' | 'intermediate' | 'advanced';
   category: string;
+  userLevel?: number;
+  userPreferences?: string[];
+  previousQuestions?: string[];
+}
+
+interface ContentGenerationRequest {
+  topic: string;
+  difficulty: 'beginner' | 'intermediate' | 'advanced';
+  format: 'explanation' | 'tutorial' | 'tips' | 'summary';
+  userContext?: {
+    currentLevel: number;
+    completedTopics: string[];
+    strugglingAreas: string[];
+    learningStyle: 'visual' | 'auditory' | 'kinesthetic' | 'reading';
+  };
+  maxLength?: number;
+}
+
+interface LearningPathRequest {
+  goalTopic: string;
+  currentLevel: 'beginner' | 'intermediate' | 'advanced';
+  targetLevel: 'intermediate' | 'advanced' | 'expert';
+  timeframe: string; // e.g., '2 weeks', '1 month'
+  availableTime: string; // e.g., '30 minutes daily'
+  userHistory: {
+    completedTopics: string[];
+    strugglingAreas: string[];
+    preferredCategories: string[];
+  };
+}
+
+interface CoachingRequest {
+  userMessage: string;
+  context: {
+    currentStreak: number;
+    recentProgress: any[];
+    moodHistory: { date: string; mood: string }[];
+    learningGoals: string[];
+    currentChallenges: string[];
+  };
+  coachingStyle: 'encouraging' | 'analytical' | 'supportive';
+  sessionType: 'check-in' | 'guidance' | 'motivation' | 'problem-solving';
 }
 
 interface GeneratedQuestion {
@@ -22,6 +64,44 @@ interface GeneratedQuestion {
   options: string[];
   correctAnswer: number;
   explanation: string;
+  difficulty?: 'easy' | 'medium' | 'hard';
+  topic?: string;
+  hint?: string;
+}
+
+interface GeneratedContent {
+  title: string;
+  content: string;
+  keyPoints: string[];
+  nextSteps: string[];
+  relatedTopics: string[];
+  estimatedReadTime: number;
+}
+
+interface LearningPath {
+  title: string;
+  description: string;
+  totalDuration: string;
+  milestones: {
+    week: number;
+    topic: string;
+    description: string;
+    resources: string[];
+    practiceExercises: string[];
+    successCriteria: string[];
+  }[];
+  prerequisites: string[];
+  skillsGained: string[];
+}
+
+interface CoachingResponse {
+  message: string;
+  mood: 'encouraging' | 'supportive' | 'motivational' | 'empathetic' | 'analytical';
+  actionItems?: string[];
+  resources?: string[];
+  followUpQuestions?: string[];
+  moodAssessment?: 'positive' | 'neutral' | 'concerning';
+  recommendedActivities?: string[];
 }
 
 interface MistralResponse {
@@ -98,6 +178,105 @@ class MistralAPI {
       // Fallback to mock questions
       return this.generateFallbackQuestions(request);
     }
+  }
+
+  /**
+   * Generate personalized learning content
+   */
+  async generateContent(request: ContentGenerationRequest): Promise<GeneratedContent> {
+    const prompt = this.buildContentPrompt(request);
+    
+    try {
+      const response = await this.callMistralAPI(prompt, 1500);
+      return this.parseContent(response);
+    } catch (error) {
+      console.error('Error generating content:', error);
+      return this.generateFallbackContent(request);
+    }
+  }
+
+  /**
+   * Create personalized learning paths
+   */
+  async generateLearningPath(request: LearningPathRequest): Promise<LearningPath> {
+    const prompt = this.buildLearningPathPrompt(request);
+    
+    try {
+      const response = await this.callMistralAPI(prompt, 2000);
+      return this.parseLearningPath(response);
+    } catch (error) {
+      console.error('Error generating learning path:', error);
+      return this.generateFallbackLearningPath(request);
+    }
+  }
+
+  /**
+   * Provide AI coaching responses
+   */
+  async generateCoachingResponse(request: CoachingRequest): Promise<CoachingResponse> {
+    const prompt = this.buildCoachingPrompt(request);
+    
+    try {
+      const response = await this.callMistralAPI(prompt, 800);
+      return this.parseCoachingResponse(response);
+    } catch (error) {
+      console.error('Error generating coaching response:', error);
+      return this.generateFallbackCoachingResponse(request);
+    }
+  }
+
+  /**
+   * Analyze user progress and provide insights
+   */
+  async analyzeProgress(userProgress: any): Promise<{
+    insights: string[];
+    recommendations: string[];
+    nextGoals: string[];
+    strengths: string[];
+    improvementAreas: string[];
+  }> {
+    const prompt = this.buildProgressAnalysisPrompt(userProgress);
+    
+    try {
+      const response = await this.callMistralAPI(prompt, 1000);
+      return this.parseProgressAnalysis(response);
+    } catch (error) {
+      console.error('Error analyzing progress:', error);
+      return this.generateFallbackProgressAnalysis();
+    }
+  }
+
+  private async callMistralAPI(prompt: string, maxTokens: number = 1000): Promise<string> {
+    const response = await fetch(`${this.baseURL}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: maxTokens,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Mistral API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data: MistralResponse = await response.json();
+    
+    if (!data.choices || data.choices.length === 0) {
+      throw new Error('No response from Mistral API');
+    }
+
+    return data.choices[0].message.content;
   }
 
   private buildPrompt(request: QuestionGenerationRequest): string {
@@ -231,6 +410,223 @@ Return the response in this exact JSON format:
       return false;
     }
   }
+
+  // Advanced AI Prompt Builders
+  private buildContentPrompt(request: ContentGenerationRequest): string {
+    const contextInfo = request.userContext ? `
+User Context:
+- Current Level: ${request.userContext.currentLevel}/10
+- Completed Topics: ${request.userContext.completedTopics.join(', ')}
+- Struggling Areas: ${request.userContext.strugglingAreas.join(', ')}
+- Learning Style: ${request.userContext.learningStyle}` : '';
+
+    return `Generate ${request.format} content about "${request.topic}" at ${request.difficulty} level.${contextInfo}
+
+Requirements:
+- Make it engaging and practical
+- Include key takeaways
+- Suggest next steps
+- Recommend related topics
+- Keep under ${request.maxLength || 800} words
+
+Return JSON format:
+{
+  "title": "Content title",
+  "content": "Main content here",
+  "keyPoints": ["Key point 1", "Key point 2"],
+  "nextSteps": ["Step 1", "Step 2"],
+  "relatedTopics": ["Topic 1", "Topic 2"],
+  "estimatedReadTime": 5
+}`;
+  }
+
+  private buildLearningPathPrompt(request: LearningPathRequest): string {
+    return `Create a personalized learning path for "${request.goalTopic}".
+
+User Profile:
+- Current Level: ${request.currentLevel}
+- Target Level: ${request.targetLevel}
+- Timeframe: ${request.timeframe}
+- Available Time: ${request.availableTime}
+- Completed Topics: ${request.userHistory.completedTopics.join(', ')}
+- Struggling Areas: ${request.userHistory.strugglingAreas.join(', ')}
+- Preferred Categories: ${request.userHistory.preferredCategories.join(', ')}
+
+Return JSON format:
+{
+  "title": "Learning Path Title",
+  "description": "Brief description",
+  "totalDuration": "4 weeks",
+  "milestones": [
+    {
+      "week": 1,
+      "topic": "Foundation Topics",
+      "description": "Build core understanding",
+      "resources": ["Resource 1", "Resource 2"],
+      "practiceExercises": ["Exercise 1"],
+      "successCriteria": ["Can do X", "Understands Y"]
+    }
+  ],
+  "prerequisites": ["Prerequisite 1"],
+  "skillsGained": ["Skill 1", "Skill 2"]
+}`;
+  }
+
+  private buildCoachingPrompt(request: CoachingRequest): string {
+    const moodTrend = request.context.moodHistory.slice(0, 3).map(m => m.mood).join(', ');
+    
+    return `Act as an ${request.coachingStyle} AI learning coach. This is a ${request.sessionType} session.
+
+User Message: "${request.userMessage}"
+
+Context:
+- Current Streak: ${request.context.currentStreak} days
+- Recent Mood Trend: ${moodTrend}
+- Learning Goals: ${request.context.learningGoals.join(', ')}
+- Current Challenges: ${request.context.currentChallenges.join(', ')}
+
+Respond appropriately with encouragement, guidance, or support. Return JSON format:
+{
+  "message": "Your coaching response",
+  "mood": "encouraging",
+  "actionItems": ["Action 1", "Action 2"],
+  "resources": ["Resource suggestion"],
+  "followUpQuestions": ["Follow-up question"],
+  "moodAssessment": "positive",
+  "recommendedActivities": ["Activity suggestion"]
+}`;
+  }
+
+  private buildProgressAnalysisPrompt(userProgress: any): string {
+    return `Analyze this user's learning progress and provide insights:
+
+${JSON.stringify(userProgress, null, 2)}
+
+Return detailed analysis in JSON format:
+{
+  "insights": ["Key insight 1", "Key insight 2"],
+  "recommendations": ["Recommendation 1", "Recommendation 2"],
+  "nextGoals": ["Goal 1", "Goal 2"],
+  "strengths": ["Strength 1", "Strength 2"],
+  "improvementAreas": ["Area 1", "Area 2"]
+}`;
+  }
+
+  // Advanced Response Parsers
+  private parseContent(response: string): GeneratedContent {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch![0]);
+      return {
+        title: parsed.title || 'Generated Content',
+        content: parsed.content || '',
+        keyPoints: parsed.keyPoints || [],
+        nextSteps: parsed.nextSteps || [],
+        relatedTopics: parsed.relatedTopics || [],
+        estimatedReadTime: parsed.estimatedReadTime || 5,
+      };
+    } catch (error) {
+      throw new Error('Failed to parse content response');
+    }
+  }
+
+  private parseLearningPath(response: string): LearningPath {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch![0]);
+      return {
+        title: parsed.title || 'Learning Path',
+        description: parsed.description || '',
+        totalDuration: parsed.totalDuration || '4 weeks',
+        milestones: parsed.milestones || [],
+        prerequisites: parsed.prerequisites || [],
+        skillsGained: parsed.skillsGained || [],
+      };
+    } catch (error) {
+      throw new Error('Failed to parse learning path response');
+    }
+  }
+
+  private parseCoachingResponse(response: string): CoachingResponse {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      const parsed = JSON.parse(jsonMatch![0]);
+      return {
+        message: parsed.message || 'I\'m here to help you succeed!',
+        mood: parsed.mood || 'supportive',
+        actionItems: parsed.actionItems || [],
+        resources: parsed.resources || [],
+        followUpQuestions: parsed.followUpQuestions || [],
+        moodAssessment: parsed.moodAssessment || 'neutral',
+        recommendedActivities: parsed.recommendedActivities || [],
+      };
+    } catch (error) {
+      throw new Error('Failed to parse coaching response');
+    }
+  }
+
+  private parseProgressAnalysis(response: string): any {
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      return JSON.parse(jsonMatch![0]);
+    } catch (error) {
+      throw new Error('Failed to parse progress analysis');
+    }
+  }
+
+  // Fallback Generators
+  private generateFallbackContent(request: ContentGenerationRequest): GeneratedContent {
+    return {
+      title: `Understanding ${request.topic}`,
+      content: `This is a ${request.difficulty} level overview of ${request.topic}. Let's explore the key concepts and practical applications.`,
+      keyPoints: [`Key concept of ${request.topic}`, 'Practical applications', 'Best practices'],
+      nextSteps: ['Practice the concepts', 'Build a project', 'Join a community'],
+      relatedTopics: ['Related topic 1', 'Related topic 2'],
+      estimatedReadTime: 3,
+    };
+  }
+
+  private generateFallbackLearningPath(request: LearningPathRequest): LearningPath {
+    return {
+      title: `${request.goalTopic} Mastery Path`,
+      description: `A structured path to master ${request.goalTopic}`,
+      totalDuration: request.timeframe,
+      milestones: [
+        {
+          week: 1,
+          topic: 'Foundations',
+          description: 'Build strong fundamentals',
+          resources: ['Online tutorials', 'Documentation'],
+          practiceExercises: ['Basic exercises'],
+          successCriteria: ['Understand core concepts'],
+        },
+      ],
+      prerequisites: ['Basic understanding of programming'],
+      skillsGained: [request.goalTopic],
+    };
+  }
+
+  private generateFallbackCoachingResponse(request: CoachingRequest): CoachingResponse {
+    return {
+      message: 'I understand what you\'re going through. Let\'s work on this together step by step.',
+      mood: 'supportive',
+      actionItems: ['Take a small step today', 'Focus on progress over perfection'],
+      resources: ['Learning resources'],
+      followUpQuestions: ['How are you feeling about your progress?'],
+      moodAssessment: 'neutral',
+      recommendedActivities: ['Take a short break', 'Review your goals'],
+    };
+  }
+
+  private generateFallbackProgressAnalysis(): any {
+    return {
+      insights: ['You\'re making steady progress', 'Consistency is your strength'],
+      recommendations: ['Keep up the good work', 'Consider challenging yourself more'],
+      nextGoals: ['Set a new learning milestone', 'Explore advanced topics'],
+      strengths: ['Consistent learning habits', 'Good completion rate'],
+      improvementAreas: ['Time management', 'Deep focus sessions'],
+    };
+  }
 }
 
 // Singleton instance
@@ -244,5 +640,14 @@ export function getMistralClient(): MistralAPI | null {
   return mistralInstance;
 }
 
-export type { QuestionGenerationRequest, GeneratedQuestion };
+export type { 
+  QuestionGenerationRequest, 
+  GeneratedQuestion, 
+  ContentGenerationRequest,
+  GeneratedContent,
+  LearningPathRequest,
+  LearningPath,
+  CoachingRequest,
+  CoachingResponse
+};
 export default MistralAPI;
